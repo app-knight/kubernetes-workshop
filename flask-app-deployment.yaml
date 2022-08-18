@@ -1,0 +1,83 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app
+  namespace: flask-app
+  labels:
+    app: flaskapi
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: flaskapi
+  template:
+    metadata:
+      labels:
+        app: flaskapi
+    spec:
+      containers:
+        - name: flask-app
+          image: koteikin/flask-app:4
+          imagePullPolicy: Always
+          command: ["python"]
+          args: ["-m", "flask", "run", "-h", "0.0.0.0"]
+          env:
+            - name: FLASK_APP
+              value: api.py
+            - name: FLASK_ENV
+              value: development
+            - name: DB_USERNAME
+              value: user
+            - name: DB_NAME
+              value: db
+            - name: DB_HOSTNAME
+              value: mysql
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: mysql-password
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+          ports:
+            - containerPort: 5000
+              name: flask
+          startupProbe:
+            httpGet:
+              path: /api/health-check/ok
+              port: flask
+            failureThreshold: 5
+            periodSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health-check/ok
+              port: flask
+            failureThreshold: 5
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health-check/ok
+              port: flask
+            failureThreshold: 6
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-app
+  namespace: flask-app
+spec:
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: flask
+      name: flask-svc
+  selector:
+    app: flask-app
+  type: LoadBalancer
